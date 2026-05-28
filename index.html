@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>KvK 差し込みタイマー</title>
+
+<style>
+
+body{
+    background:#111827;
+    color:white;
+    font-family:sans-serif;
+    margin:0;
+    padding:20px;
+}
+
+.container{
+    max-width:700px;
+    margin:auto;
+}
+
+.card{
+    background:#1f2937;
+    border-radius:16px;
+    padding:20px;
+    margin-bottom:20px;
+}
+
+h1,h2{
+    text-align:center;
+}
+
+.utc-clock{
+    text-align:center;
+    font-size:36px;
+    margin-bottom:20px;
+    font-weight:bold;
+    font-family:monospace;
+}
+
+.big-text{
+    text-align:center;
+    font-size:64px;
+    font-weight:bold;
+    margin:30px 0;
+    font-family:monospace;
+}
+
+input, select{
+    width:100%;
+    padding:12px;
+    margin-top:5px;
+    margin-bottom:15px;
+    border:none;
+    border-radius:10px;
+    box-sizing:border-box;
+    font-size:16px;
+}
+
+button{
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:12px;
+    background:#2563eb;
+    color:white;
+    font-size:18px;
+    cursor:pointer;
+    margin-top:10px;
+}
+
+.result{
+    background:#0f172a;
+    padding:15px;
+    border-radius:12px;
+    margin-top:10px;
+    font-family:monospace;
+    text-align:center;
+}
+
+.tabs{
+    display:flex;
+    gap:10px;
+    margin-bottom:20px;
+}
+
+.tab-btn{
+    flex:1;
+    padding:14px;
+    border:none;
+    border-radius:12px;
+    background:#374151;
+    color:white;
+    font-size:18px;
+    cursor:pointer;
+}
+
+.active-tab{
+    background:#2563eb;
+}
+
+.tab-content{
+    display:none;
+}
+
+.active-content{
+    display:block;
+}
+
+.good{
+    color:#22c55e;
+}
+
+.mid{
+    color:#facc15;
+}
+
+.bad{
+    color:#ef4444;
+}
+
+.stats{
+    margin-top:20px;
+    line-height:1.8;
+    font-size:18px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>KvK 差し込みタイマー</h1>
+
+<div class="tabs">
+
+<button
+class="tab-btn active-tab"
+id="timerTabBtn"
+onclick="switchTab('timer')">
+
+差し込みタイマー
+
+</button>
+
+<button
+class="tab-btn"
+id="trainingTabBtn"
+onclick="switchTab('training')">
+
+練習モード
+
+</button>
+
+</div>
+
+<!-- 差し込みタイマー -->
+
+<div id="timerTab"
+class="tab-content active-content">
+
+<div class="card">
+
+<div>現在UTC時刻</div>
+
+<div class="utc-clock"
+id="utcClock">
+
+00:00:00
+
+</div>
+
+<label>集結残り時間（秒）</label>
+
+<input
+type="number"
+id="rallyRemain"
+placeholder="例 180">
+
+<label>敵行軍時間（秒）</label>
+
+<input
+type="number"
+id="enemyMarch"
+placeholder="例 45">
+
+<label>自分行軍時間（秒）</label>
+
+<input
+type="number"
+id="myMarch"
+placeholder="例 38">
+
+<label>ラグ補正（秒）</label>
+
+<input
+type="number"
+id="lag"
+value="0.3"
+step="0.1">
+
+<button onclick="calculateInsert()">
+計算する
+</button>
+
+<div id="insertResult"
+class="result">
+
+結果待ち
+
+</div>
+
+<button onclick="confirmRally()">
+集結確認
+</button>
+
+</div>
+
+</div>
+
+<!-- 練習モード -->
+
+<div id="trainingTab"
+class="tab-content">
+
+<div class="card">
+
+<h2>差し込み練習</h2>
+
+<label>理想差し込み秒数</label>
+
+<input
+type="number"
+id="idealTiming"
+value="0.3"
+step="0.1">
+
+<button onclick="startTraining()">
+START
+</button>
+
+<div id="trainingText"
+class="big-text">
+
+READY
+
+</div>
+
+<button onclick="tapTraining()">
+TAP
+</button>
+
+<div id="trainingResult"
+class="result">
+
+待機中
+
+</div>
+
+<div class="stats">
+
+<div class="result">
+平均:
+<span id="avgText">
+0.000 秒
+</span>
+</div>
+
+<div class="result">
+BEST:
+<span id="bestText">
+0.000 秒
+</span>
+</div>
+
+<div class="result">
+回数:
+<span id="countText">
+0
+</span>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+/* UTC時計 */
+
+function updateClock(){
+
+    const now = new Date();
+
+    const h =
+        String(now.getUTCHours())
+        .padStart(2,"0");
+
+    const m =
+        String(now.getUTCMinutes())
+        .padStart(2,"0");
+
+    const s =
+        String(now.getUTCSeconds())
+        .padStart(2,"0");
+
+    document.getElementById("utcClock")
+        .innerText =
+        `${h}:${m}:${s}`;
+}
+
+setInterval(updateClock,1000);
+
+updateClock();
+
+/* タブ切り替え */
+
+function switchTab(tab){
+
+    document.getElementById("timerTab")
+        .classList.remove("active-content");
+
+    document.getElementById("trainingTab")
+        .classList.remove("active-content");
+
+    document.getElementById("timerTabBtn")
+        .classList.remove("active-tab");
+
+    document.getElementById("trainingTabBtn")
+        .classList.remove("active-tab");
+
+    if(tab === "timer"){
+
+        document.getElementById("timerTab")
+            .classList.add("active-content");
+
+        document.getElementById("timerTabBtn")
+            .classList.add("active-tab");
+
+    }else{
+
+        document.getElementById("trainingTab")
+            .classList.add("active-content");
+
+        document.getElementById("trainingTabBtn")
+            .classList.add("active-tab");
+    }
+}
+
+/* 差し込みタイマー */
+
+function calculateInsert(){
+
+    const rally =
+        parseFloat(
+            document.getElementById("rallyRemain").value
+        ) || 0;
+
+    const enemy =
+        parseFloat(
+            document.getElementById("enemyMarch").value
+        ) || 0;
+
+    const mine =
+        parseFloat(
+            document.getElementById("myMarch").value
+        ) || 0;
+
+    const lag =
+        parseFloat(
+            document.getElementById("lag").value
+        ) || 0;
+
+    const timing =
+        rally - enemy + mine - lag;
+
+    document.getElementById("insertResult")
+        .innerHTML = `
+        差し込み推奨:<br><br>
+        <strong>
+        集結残り
+        ${timing.toFixed(1)} 秒
+        </strong>
+    `;
+}
+
+function confirmRally(){
+
+    alert("集結確認！");
+}
+
+/* 練習モード */
+
+let trainingStarted = false;
+
+let trainingTarget = 0;
+
+let trainingResults = [];
+
+let trainingBest = null;
+
+let trainingInterval = null;
+
+function vibrate(){
+
+    if(navigator.vibrate){
+
+        navigator.vibrate(80);
+    }
+}
+
+function startTraining(){
+
+    trainingStarted = false;
+
+    clearInterval(trainingInterval);
+
+    document.getElementById("trainingResult")
+        .innerHTML = "待機中";
+
+    let remain = 5.0;
+
+    const ideal =
+        parseFloat(
+            document.getElementById("idealTiming").value
+        );
+
+    document.getElementById("trainingText")
+        .innerText =
+        remain.toFixed(1);
+
+    trainingInterval = setInterval(() => {
+
+        remain -= 0.1;
+
+        document.getElementById("trainingText")
+            .innerText =
+            remain.toFixed(1);
+
+        if(remain <= 0){
+
+            clearInterval(trainingInterval);
+
+            document.getElementById("trainingText")
+                .innerText = "MISS";
+
+            trainingStarted = false;
+        }
+
+    },100);
+
+    trainingTarget =
+        performance.now() +
+        ((5.0 - ideal) * 1000);
+
+    trainingStarted = true;
+}
+
+function tapTraining(){
+
+    if(!trainingStarted){
+
+        document.getElementById("trainingResult")
+            .innerHTML = `
+            <span class="bad">
+                タイミング外
+            </span>
+        `;
+
+        return;
+    }
+
+    const now =
+        performance.now();
+
+    const diff =
+        (now - trainingTarget) / 1000;
+
+    const abs =
+        Math.abs(diff);
+
+    let rank = "";
+
+    let className = "";
+
+    if(abs <= 0.05){
+
+        rank = "PERFECT";
+
+        className = "good";
+
+    }else if(abs <= 0.10){
+
+        rank = "GOOD";
+
+        className = "mid";
+
+    }else{
+
+        rank = "MISS";
+
+        className = "bad";
+    }
+
+    document.getElementById("trainingResult")
+        .innerHTML = `
+        <span class="${className}">
+            ${rank}<br>
+            ${diff >= 0 ? "+" : ""}
+            ${diff.toFixed(3)} 秒
+        </span>
+    `;
+
+    trainingResults.push(abs);
+
+    if(trainingBest === null ||
+       abs < trainingBest){
+
+        trainingBest = abs;
+    }
+
+    updateTrainingStats();
+
+    trainingStarted = false;
+
+    clearInterval(trainingInterval);
+
+    setTimeout(() => {
+
+        document.getElementById("trainingText")
+            .innerText = "READY";
+
+    },800);
+}
+
+function updateTrainingStats(){
+
+    let total = 0;
+
+    for(let r of trainingResults){
+
+        total += r;
+    }
+
+    const avg =
+        total / trainingResults.length;
+
+    document.getElementById("avgText")
+        .innerText =
+        avg.toFixed(3) + " 秒";
+
+    document.getElementById("bestText")
+        .innerText =
+        trainingBest.toFixed(3) + " 秒";
+
+    document.getElementById("countText")
+        .innerText =
+        trainingResults.length;
+}
+
+</script>
+
+</body>
+</html>
